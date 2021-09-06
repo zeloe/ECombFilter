@@ -93,14 +93,22 @@ void ECombFilterAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void ECombFilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
+    juce::dsp::ProcessSpec spec;
+        spec.maximumBlockSize = samplesPerBlock;
+        
+        spec.numChannels = 1;
+        
+        spec.sampleRate = sampleRate;
+        
+        
+        ChainStageL1.prepare(spec);
+        ChainStageR1.prepare(spec);
 }
 
 void ECombFilterAudioProcessor::releaseResources()
 {
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
+    ChainStageL1.reset();
+    ChainStageR1.reset();
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -144,15 +152,38 @@ void ECombFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
-        auto* channelData = buffer.getWritePointer (channel);
+        auto* inDataL = buffer.getReadPointer (0);
+        auto* inDataR = buffer.getReadPointer(1);
+        auto* outDataL = buffer.getWritePointer(0);
+        auto* outDataR = buffer.getWritePointer(1);
+        auto bufferSampels = buffer.getNumSamples();
+        
+        for(int i = 0; i < bufferSampels; i++)
+        {
+            dryWetSmoothed = smoothing(dryWetSmoothed, apvts.getRawParameterValue("DryWet")->load());
+            dcoffset = 1.0f - dryWetSmoothed;
+            hzSmoothed = smoothing(hzSmoothed, apvts.getRawParameterValue("Hz")->load());
+            gainSmoothed = smoothing(gainSmoothed, apvts.getRawParameterValue("Gain")->load());
+            const float inProcessDataL = inDataL[i];
+            const float inProcessDataR = inDataR[i];
+            const float msperiod = periodinms(hzSmoothed);
+            const int delayTimeInSampels =  ((msperiod*getSampleRate()/1000));
+            const float t_60 = t60(gainSmoothed, delayTimeInSampels);
+            const float gain_coefficient = gaincoefficient(delayTimeInSampels, t_60);
+            
+            stage1L = (inProcessDataL *gain_coefficient) +ChainStageL1.popSample(0, hzSmoothed) *gain_coefficient * 0.95f;
+            ChainStageL1.pushSample(0, stage1L);
+            stage1R = (inProcessDataR *gain_coefficient) + ChainStageR1.popSample(0, hzSmoothed)  *gain_coefficient *  0.95f;
+            ChainStageR1.pushSample(0, stage1R);
+            outDataL[i] = dcoffset * (inProcessDataL) + dryWetSmoothed * stage1L;
+            outDataR[i] =  dcoffset * (inProcessDataR) + dryWetSmoothed * stage1R;
+            
+            
+        }
+        
+        
 
         // ..do something to the data...
     }
@@ -172,15 +203,17 @@ juce::AudioProcessorEditor* ECombFilterAudioProcessor::createEditor()
 //==============================================================================
 void ECombFilterAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
+    juce::MemoryOutputStream mos (destData, true);
+        apvts.state.writeToStream(mos);
 }
 
 void ECombFilterAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
+    auto tree = juce::ValueTree::readFromData(data, sizeInBytes);
+           if(tree.isValid() )
+           {
+               apvts.replaceState(tree);
+           }
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -190,12 +223,14 @@ ECombFilterAudioProcessor::createParameterLayout()
     layout.add(std::make_unique<juce::AudioParameterFloat>("DryWet",
                                                            "DryWet",
                                                             juce::NormalisableRange<float>(0.f,1.f, 0.1f,1.f),0.5f));
-    layout.add(std::make_unique<juce::AudioParameterFloat>("Hz",
-                                                           "Hz",
-                                                            juce::NormalisableRange<float>(20.f,2000.f, 0.1f,1.f),100.f));
+    layout.add(std::make_unique<juce::AudioParameterInt>("Hz",
+                                                         "Hz",
+                                                          20,
+                                                          2000,
+                                                          100));
     layout.add(std::make_unique<juce::AudioParameterFloat>("Gain",
                                                            "Gain",
-                                                            juce::NormalisableRange<float>(0.f,1.f, 0.1f,1.f),0.5f));
+                                                            juce::NormalisableRange<float>(0.1f,0.75f, 0.1f,0.9f),0.5f));
     return layout;
     
                

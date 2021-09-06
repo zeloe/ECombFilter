@@ -49,18 +49,17 @@ void ECombFilterAudioProcessorEditor::paint (juce::Graphics& g)
                            (110),
                            (104));
     hzLabel.setBounds((84),
-                      (107),
+                      (157),
                       (110),
                       (110));
     gainLabel.setBounds((293),
-                        (107),
+                        (157),
                         (110),
                         (110));
     dryWetLabel.setBounds((178),
-                          (207),
+                          (257),
                           (110),
                           (110));
-}
 }
 
 void ECombFilterAudioProcessorEditor::resized()

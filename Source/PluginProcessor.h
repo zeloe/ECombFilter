@@ -9,6 +9,28 @@
 #pragma once
 
 #include <JuceHeader.h>
+inline float smoothing (float smoothed, float tosmooth)
+{
+return smoothed - 0.001 *  (smoothed-(tosmooth));
+    
+}
+
+inline float periodinms (float delaytime)
+{
+    return (1000.0f/delaytime);
+}
+
+inline float t60 (float gaincoefficient, float period_ms)
+{
+    return (log(0.001)*period_ms)/gaincoefficient;
+}
+
+
+inline float gaincoefficient (float period_ms, float t_60)
+{
+    return (log(0.001) * period_ms)/t_60;
+}
+
 
 //==============================================================================
 /**
@@ -56,6 +78,10 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState apvts {*this, nullptr, "Parameters", createParameterLayout()};
 private:
+    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear>
+    ChainStageL1{96000},
+    ChainStageR1{96000};
+    float gainSmoothed, hzSmoothed, dryWetSmoothed, dcoffset, stage1L, stage1R, feedbackL, feedbackR;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ECombFilterAudioProcessor)
 };
