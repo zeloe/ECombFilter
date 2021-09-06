@@ -12,7 +12,7 @@
 			<key>manufacturer</key>
 			<string>Manu</string>
 			<key>name</key>
-			<string>yourcompany: ECombFilter</string>
+			<string>CodeZenAudio: ECombFilter</string>
 			<key>resourceUsage</key>
 			<dict>
 				<key>network.client</key>

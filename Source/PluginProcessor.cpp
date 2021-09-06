@@ -100,6 +100,7 @@ void ECombFilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
         
         spec.sampleRate = sampleRate;
         
+      
         
         ChainStageL1.prepare(spec);
         ChainStageR1.prepare(spec);
@@ -154,37 +155,31 @@ void ECombFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
-        auto* inDataL = buffer.getReadPointer (0);
+        auto* inDataL = buffer.getReadPointer(0);
         auto* inDataR = buffer.getReadPointer(1);
         auto* outDataL = buffer.getWritePointer(0);
         auto* outDataR = buffer.getWritePointer(1);
         auto bufferSampels = buffer.getNumSamples();
-        
+        dryWetSmoothed = smoothing(dryWetSmoothed, apvts.getRawParameterValue("DryWet")->load());
+        dcoffset = 1.0f - dryWetSmoothed;
+        hzSmoothed = smoothing(hzSmoothed, apvts.getRawParameterValue("Hz")->load());
+        gainSmoothed = smoothing(gainSmoothed, apvts.getRawParameterValue("Gain")->load());
+       
+       
+        msperiod = periodinms(hzSmoothed);
+        delayTimeInSampels =  ((msperiod*getSampleRate()/1000));
+        t_60 = t60(gainSmoothed, delayTimeInSampels);
+        gain_coefficient = gaincoefficient(delayTimeInSampels, t_60);
         for(int i = 0; i < bufferSampels; i++)
         {
-            dryWetSmoothed = smoothing(dryWetSmoothed, apvts.getRawParameterValue("DryWet")->load());
-            dcoffset = 1.0f - dryWetSmoothed;
-            hzSmoothed = smoothing(hzSmoothed, apvts.getRawParameterValue("Hz")->load());
-            gainSmoothed = smoothing(gainSmoothed, apvts.getRawParameterValue("Gain")->load());
-            const float inProcessDataL = inDataL[i];
-            const float inProcessDataR = inDataR[i];
-            const float msperiod = periodinms(hzSmoothed);
-            const int delayTimeInSampels =  ((msperiod*getSampleRate()/1000));
-            const float t_60 = t60(gainSmoothed, delayTimeInSampels);
-            const float gain_coefficient = gaincoefficient(delayTimeInSampels, t_60);
             
-            stage1L = (inProcessDataL *gain_coefficient) +ChainStageL1.popSample(0, hzSmoothed) *gain_coefficient * 0.95f;
+            stage1L = (inDataL[i] *gain_coefficient) +ChainStageL1.popSample(0, static_cast<int>(hzSmoothed)) *gain_coefficient * 0.95f;
             ChainStageL1.pushSample(0, stage1L);
-            stage1R = (inProcessDataR *gain_coefficient) + ChainStageR1.popSample(0, hzSmoothed)  *gain_coefficient *  0.95f;
-            ChainStageR1.pushSample(0, stage1R);
-            outDataL[i] = dcoffset * (inProcessDataL) + dryWetSmoothed * stage1L;
-            outDataR[i] =  dcoffset * (inProcessDataR) + dryWetSmoothed * stage1R;
-            
-            
+            outDataL[i] = dcoffset * (inDataL[i]) + dryWetSmoothed * stage1L;
+        stage1R = (inDataR[i] *gain_coefficient) + ChainStageR1.popSample(0, static_cast<int>(hzSmoothed))  *gain_coefficient * 0.95f;
+        ChainStageR1.pushSample(0, stage1R);
+        outDataR[i] =  dcoffset * (inDataR[i]) + dryWetSmoothed * stage1R;
         }
-        
-        
-
         // ..do something to the data...
     }
 }
@@ -222,7 +217,9 @@ ECombFilterAudioProcessor::createParameterLayout()
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterFloat>("DryWet",
                                                            "DryWet",
-                                                            juce::NormalisableRange<float>(0.f,1.f, 0.1f,1.f),0.5f));
+                                                            0.f,
+                                                            1.f,
+                                                           0.5f));
     layout.add(std::make_unique<juce::AudioParameterInt>("Hz",
                                                          "Hz",
                                                           20,
@@ -230,7 +227,9 @@ ECombFilterAudioProcessor::createParameterLayout()
                                                           100));
     layout.add(std::make_unique<juce::AudioParameterFloat>("Gain",
                                                            "Gain",
-                                                            juce::NormalisableRange<float>(0.1f,0.75f, 0.1f,0.9f),0.5f));
+                                                           0.1f,
+                                                           0.55f,
+                                                           0.25));
     return layout;
     
                

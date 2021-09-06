@@ -81,7 +81,10 @@ private:
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear>
     ChainStageL1{96000},
     ChainStageR1{96000};
-    float gainSmoothed, hzSmoothed, dryWetSmoothed, dcoffset, stage1L, stage1R, feedbackL, feedbackR;
+    float gainSmoothed = 0, hzSmoothed = 20, dryWetSmoothed = 0.5f, dcoffset, stage1L = 0, stage1R = 0;
+
+    float msperiod, t_60, gain_coefficient;
+    int delayTimeInSampels;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ECombFilterAudioProcessor)
 };

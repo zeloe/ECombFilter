@@ -2,7 +2,7 @@
 
 <JUCERPROJECT id="XE8aqX" name="ECombFilter" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" cppLanguageStandard="17"
-              pluginFormats="buildAU,buildVST3">
+              pluginFormats="buildAU,buildVST3" pluginManufacturer="CodeZenAudio">
   <MAINGROUP id="zgirsd" name="ECombFilter">
     <GROUP id="{84ECC28E-F7B7-79F4-66C8-83418ECE2A8C}" name="Source">
       <FILE id="bZLWXY" name="PluginProcessor.cpp" compile="1" resource="0"
