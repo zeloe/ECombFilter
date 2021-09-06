@@ -11,11 +11,18 @@
 
 //==============================================================================
 ECombFilterAudioProcessorEditor::ECombFilterAudioProcessorEditor (ECombFilterAudioProcessor& p)
-    : AudioProcessorEditor (&p), audioProcessor (p)
+    : AudioProcessorEditor (&p), audioProcessor (p),
+dryWetAttachment(audioProcessor.apvts,"DryWet", dryWetSlider),
+hzAttachment(audioProcessor.apvts, "Hz", hzSlider),
+gainAttachment(audioProcessor.apvts, "Gain", gainSlider)
 {
-    // Make sure that before the constructor has finished, you've set the
-    // editor's size to whatever you need it to be.
-    setSize (400, 300);
+    for (auto* comp : getComps()){
+        addAndMakeVisible(comp);
+    }
+    setSize (400, 400);
+    hzLabel.setText("Hz", juce::dontSendNotification);
+    gainLabel.setText("Gain", juce::dontSendNotification);
+    dryWetLabel.setText("DryWet", juce::dontSendNotification);
 }
 
 ECombFilterAudioProcessorEditor::~ECombFilterAudioProcessorEditor()
@@ -26,15 +33,50 @@ ECombFilterAudioProcessorEditor::~ECombFilterAudioProcessorEditor()
 void ECombFilterAudioProcessorEditor::paint (juce::Graphics& g)
 {
     // (Our component is opaque, so we must completely fill the background with a solid colour)
-    g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 
-    g.setColour (juce::Colours::white);
-    g.setFont (15.0f);
-    g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
+    g.setColour (juce::Colours::black);
+    
+    hzSlider.setBounds((42),
+                       (110),
+                       (110),
+                       (104));
+    gainSlider.setBounds((256),
+                         (110),
+                         (110),
+                         (104));
+    dryWetSlider.setBounds((150),
+                           (210),
+                           (110),
+                           (104));
+    hzLabel.setBounds((84),
+                      (107),
+                      (110),
+                      (110));
+    gainLabel.setBounds((293),
+                        (107),
+                        (110),
+                        (110));
+    dryWetLabel.setBounds((178),
+                          (207),
+                          (110),
+                          (110));
+}
 }
 
 void ECombFilterAudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
+}
+std::vector<juce::Component*> ECombFilterAudioProcessorEditor::getComps()
+{
+    return
+    {
+        &dryWetSlider,
+        &hzSlider,
+        &gainSlider,
+        &dryWetLabel,
+        &hzLabel,
+        &gainLabel
+    };
 }

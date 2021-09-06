@@ -11,6 +11,17 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
+
+struct RotarySliderNoLabel : juce::Slider
+{
+    RotarySliderNoLabel() :juce::Slider(juce::Slider::RotaryHorizontalVerticalDrag,
+                                        juce::Slider::TextEntryBoxPosition::NoTextBox)
+    {
+        
+    }
+};
+
+
 //==============================================================================
 /**
 */
@@ -25,9 +36,15 @@ public:
     void resized() override;
 
 private:
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
+    RotarySliderNoLabel dryWetSlider, hzSlider, gainSlider;
     ECombFilterAudioProcessor& audioProcessor;
+    std::vector<juce::Component*> getComps();
+    juce::Label dryWetLabel, hzLabel, gainLabel;
+    
+    using APVTS = juce::AudioProcessorValueTreeState;
+    using Attachment = APVTS::SliderAttachment;
+            
+    Attachment dryWetAttachment,  hzAttachment, gainAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ECombFilterAudioProcessorEditor)
 };

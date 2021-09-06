@@ -183,6 +183,24 @@ void ECombFilterAudioProcessor::setStateInformation (const void* data, int sizeI
     // whose contents will have been created by the getStateInformation() call.
 }
 
+juce::AudioProcessorValueTreeState::ParameterLayout
+ECombFilterAudioProcessor::createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    layout.add(std::make_unique<juce::AudioParameterFloat>("DryWet",
+                                                           "DryWet",
+                                                            juce::NormalisableRange<float>(0.f,1.f, 0.1f,1.f),0.5f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("Hz",
+                                                           "Hz",
+                                                            juce::NormalisableRange<float>(20.f,2000.f, 0.1f,1.f),100.f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("Gain",
+                                                           "Gain",
+                                                            juce::NormalisableRange<float>(0.f,1.f, 0.1f,1.f),0.5f));
+    return layout;
+    
+               
+    
+}
 //==============================================================================
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
