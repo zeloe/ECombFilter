@@ -93,32 +93,43 @@ void ECombFilterAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void ECombFilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::dsp::ProcessSpec spec;
-        spec.maximumBlockSize = samplesPerBlock;
-        
-        spec.numChannels = 1;
-        
-        spec.sampleRate = sampleRate;
-        
-      
-        
-        ChainStageL1.prepare(spec);
-        ChainStageR1.prepare(spec);
+    for(int i = 0; i < 44101; ++i)
+    {
+        mBufferL[i] = 0;
+        mBufferR[i] = 0;
+    }
+    dryWetValues.smoother = new Smoother(1, sampleRate);
+    hzValues.smoother = new Smoother(1, sampleRate);
+    gainCoefficientValues.smoother = new Smoother(1, sampleRate);
+    scaleValues.smoother = new Smoother(1,sampleRate);
+    mDelayIndex = 0;
+   
 }
 
 void ECombFilterAudioProcessor::releaseResources()
 {
-    ChainStageL1.reset();
-    ChainStageR1.reset();
+    juce::zeromem(mBufferL, sizeof(double) * 44001);
+    juce::zeromem(mBufferR, sizeof(double) * 44001);
 }
-
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool ECombFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
+    
   #if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
   #else
+    /*
+    if (layouts.getMainInputChannelSet()  == juce::AudioChannelSet::disabled()
+     || layouts.getMainOutputChannelSet() == juce::AudioChannelSet::disabled())
+        return false;
+ 
+    if //  &&(layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono())
+    (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+        return false;
+ 
+    return layouts.getMainInputChannelSet() == layouts.getMainOutputChannelSet();
+    */
     // This is the place where you check if the layout is supported.
     // In this template code we only support mono or stereo.
     // Some plugin hosts, such as certain GarageBand versions, will only
@@ -135,6 +146,7 @@ bool ECombFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
 
     return true;
   #endif
+     
 }
 #endif
 
@@ -150,38 +162,73 @@ void ECombFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     // This is here to avoid people getting screaming feedback
     // when they first compile a plugin, but obviously you don't need to keep
     // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+   for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
+    
+    dryWetValues.targetValue = apvts.getRawParameterValue("DryWet")->load();
+    dryWetValues.currentValue = dryWetValues.smoother->process(dryWetValues.targetValue);
+   
 
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* inDataL = buffer.getReadPointer(0);
-        auto* inDataR = buffer.getReadPointer(1);
+    hzValues.targetValue = apvts.getRawParameterValue("Delay")->load();
+    hzValues.currentValue = hzValues.smoother->process(hzValues.targetValue);
+
+    gainCoefficientValues.targetValue = apvts.getRawParameterValue("Gain")->load();
+    gainCoefficientValues.currentValue = gainCoefficientValues.smoother->process(gainCoefficientValues.targetValue);
+    dcoffset = 1.0f - dryWetValues.currentValue;
+
+    t_60 = t60(gainCoefficientValues.currentValue, hzValues.currentValue);
+    scaleValues.currentValue = scaleValues.smoother->process(gaincoefficient(hzValues.currentValue, t_60));
+     
+    const int buffersampels = buffer.getNumSamples();
+        auto* inDataL = buffer.getWritePointer(0);
         auto* outDataL = buffer.getWritePointer(0);
         auto* outDataR = buffer.getWritePointer(1);
-        auto bufferSampels = buffer.getNumSamples();
-        dryWetSmoothed = smoothing(dryWetSmoothed, apvts.getRawParameterValue("DryWet")->load());
-        dcoffset = 1.0f - dryWetSmoothed;
-        hzSmoothed = smoothing(hzSmoothed, apvts.getRawParameterValue("Hz")->load());
-        gainSmoothed = smoothing(gainSmoothed, apvts.getRawParameterValue("Gain")->load());
-       
-       
-        msperiod = periodinms(hzSmoothed);
-        delayTimeInSampels =  ((msperiod*getSampleRate()/1000));
-        t_60 = t60(gainSmoothed, delayTimeInSampels);
-        gain_coefficient = gaincoefficient(delayTimeInSampels, t_60);
-        for(int i = 0; i < bufferSampels; i++)
+        auto* inDataR = buffer.getWritePointer(1);
+        for(int i = 0; i < buffersampels; i++)
         {
+            readPosition = (double)mDelayIndex - hzValues.currentValue;
+           
+            if (readPosition < 0.0f) {
+                readPosition = readPosition + MaxBufferDelaySize;
+            }
+             index_y0 = (int)readPosition - 1;
+            if(index_y0 <= 0){
+                index_y0 = index_y0 + MaxBufferDelaySize;
+            }
+             index_y1 = readPosition;
             
-            stage1L = (inDataL[i] *gain_coefficient) +ChainStageL1.popSample(0, static_cast<int>(hzSmoothed)) *gain_coefficient * 0.95f;
-            ChainStageL1.pushSample(0, stage1L);
-            outDataL[i] = dcoffset * (inDataL[i]) + dryWetSmoothed * stage1L;
-        stage1R = (inDataR[i] *gain_coefficient) + ChainStageR1.popSample(0, static_cast<int>(hzSmoothed))  *gain_coefficient * 0.95f;
-        ChainStageR1.pushSample(0, stage1R);
-        outDataR[i] =  dcoffset * (inDataR[i]) + dryWetSmoothed * stage1R;
-        }
-        // ..do something to the data...
+            if(index_y1 > MaxBufferDelaySize){
+                index_y1 = index_y1 - MaxBufferDelaySize;
+            }
+            
+             sample_y0L = mBufferL[index_y0];
+             sample_y1L = mBufferL[index_y1];
+            sample_y0R = mBufferR[index_y0];
+             sample_y1R = mBufferR[index_y1];
+             t = readPosition - (int)readPosition;
+            
+            FeedbackSampleL = linear_interp(sample_y0L, sample_y1L, t);
+            FeedbackSampleR = linear_interp(sample_y0R, sample_y1R, t);
+            mDelayIndex += 1;
+            mBufferL[mDelayIndex] = inDataL[i] + channelL ;
+           
+            channelL = dcoffset *  inDataL[i] +FeedbackSampleL * dryWetValues.currentValue * scaleValues.currentValue * gainCoefficientValues.currentValue *0.95f;
+            outDataL[i] = channelL;
+           
+         
+           
+            
+            mBufferR[mDelayIndex] = inDataR[i] + channelR;
+            channelR  = dcoffset * inDataR[i] +FeedbackSampleR * dryWetValues.currentValue * scaleValues.currentValue * gainCoefficientValues.currentValue * 0.95f;
+            outDataR[i] = channelR;
+            
+            if (mDelayIndex >= MaxBufferDelaySize){
+                mDelayIndex -= MaxBufferDelaySize;
+                }
+             
+       
     }
+    
 }
 
 //==============================================================================
@@ -220,21 +267,22 @@ ECombFilterAudioProcessor::createParameterLayout()
                                                             0.f,
                                                             1.f,
                                                            0.5f));
-    layout.add(std::make_unique<juce::AudioParameterInt>("Hz",
-                                                         "Hz",
-                                                          20,
+    layout.add(std::make_unique<juce::AudioParameterInt>("Delay",
+                                                         "Delay",
+                                                          5,
                                                           2000,
                                                           100));
     layout.add(std::make_unique<juce::AudioParameterFloat>("Gain",
                                                            "Gain",
                                                            0.1f,
-                                                           0.55f,
+                                                           0.95f,
                                                            0.25));
     return layout;
     
                
     
 }
+
 //==============================================================================
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

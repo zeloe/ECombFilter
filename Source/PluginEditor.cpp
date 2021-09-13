@@ -13,14 +13,14 @@
 ECombFilterAudioProcessorEditor::ECombFilterAudioProcessorEditor (ECombFilterAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p),
 dryWetAttachment(audioProcessor.apvts,"DryWet", dryWetSlider),
-hzAttachment(audioProcessor.apvts, "Hz", hzSlider),
+hzAttachment(audioProcessor.apvts, "Delay", hzSlider),
 gainAttachment(audioProcessor.apvts, "Gain", gainSlider)
 {
     for (auto* comp : getComps()){
         addAndMakeVisible(comp);
     }
     setSize (400, 400);
-    hzLabel.setText("Hz", juce::dontSendNotification);
+    hzLabel.setText("Delay", juce::dontSendNotification);
     gainLabel.setText("Gain", juce::dontSendNotification);
     dryWetLabel.setText("DryWet", juce::dontSendNotification);
 }
