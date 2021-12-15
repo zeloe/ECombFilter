@@ -118,28 +118,29 @@ public:
         Smoother* smoother;
     };
     
-     double mBufferL[44101];
-     double mBufferR[44101];
+    float mBufferL[44101] = {0};
+    float mBufferR[44101] = {0};
 
-
+    float getInterpolatedSample(float inDelayTimeInSamples, float mBuffer[], int MaxBufferDelaySize,int index);
 private:
      
     float leftChannel, rightChannel;
     float msperiod, t_60, gain_coefficient, dcoffset;
     smoothValue hzValues, dryWetValues, gainCoefficientValues, scaleValues;// delayTimeInSamplesValues;
-    int delayTimeInSampels, mDelayIndex = 0;
-     float channelL, channelR;
-     float FeedbackSampleL ,FeedbackSampleR;
-     float sample_y0L  ;
-     float sample_y1L  ;
-     float sample_y0R ;
-     float sample_y1R ;
-     float t;
-     int index_y0;
-    int index_y1;
+    int delayTimeInSampels = 0, mDelayIndexL = 0, mDelayIndexR = 0;
+     float channelL = 0, channelR = 0;
+     float FeedbackSampleL = 0 ,FeedbackSampleR = 0;
+    float FeedforwardSampleL = 0, FeedforwardSampleR = 0; 
+     float sample_y0L  = 0;
+     float sample_y1L = 0 ;
+     float sample_y0R = 0;
+     float sample_y1R = 0 ;
+     float t = 0;
+     int index_y0 = 0 ;
+    int index_y1 = 0;
     float samplerate;
-    double readPosition;
-    float dataForDelayL, dataForDelayR;
+    double readPosition = 0;
+    float dataForDelayL = 0, dataForDelayR = 0;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ECombFilterAudioProcessor)
 };

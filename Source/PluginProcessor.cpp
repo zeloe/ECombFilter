@@ -93,23 +93,17 @@ void ECombFilterAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void ECombFilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    for(int i = 0; i < 44101; ++i)
-    {
-        mBufferL[i] = 0;
-        mBufferR[i] = 0;
-    }
+    
     dryWetValues.smoother = new Smoother(1, sampleRate);
     hzValues.smoother = new Smoother(1, sampleRate);
     gainCoefficientValues.smoother = new Smoother(1, sampleRate);
     scaleValues.smoother = new Smoother(1,sampleRate);
-    mDelayIndex = 0;
    
 }
 
 void ECombFilterAudioProcessor::releaseResources()
 {
-    juce::zeromem(mBufferL, sizeof(double) * 44001);
-    juce::zeromem(mBufferR, sizeof(double) * 44001);
+   
 }
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool ECombFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -186,46 +180,25 @@ void ECombFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         auto* inDataR = buffer.getWritePointer(1);
         for(int i = 0; i < buffersampels; i++)
         {
-            readPosition = (double)mDelayIndex - hzValues.currentValue;
-           
-            if (readPosition < 0.0f) {
-                readPosition = readPosition + MaxBufferDelaySize;
-            }
-             index_y0 = (int)readPosition - 1;
-            if(index_y0 <= 0){
-                index_y0 = index_y0 + MaxBufferDelaySize;
-            }
-             index_y1 = readPosition;
-            
-            if(index_y1 > MaxBufferDelaySize){
-                index_y1 = index_y1 - MaxBufferDelaySize;
-            }
-            
-             sample_y0L = mBufferL[index_y0];
-             sample_y1L = mBufferL[index_y1];
-            sample_y0R = mBufferR[index_y0];
-             sample_y1R = mBufferR[index_y1];
-             t = readPosition - (int)readPosition;
-            
-            FeedbackSampleL = linear_interp(sample_y0L, sample_y1L, t);
-            FeedbackSampleR = linear_interp(sample_y0R, sample_y1R, t);
-            mDelayIndex += 1;
-            mBufferL[mDelayIndex] = inDataL[i] + channelL ;
-           
-            channelL = dcoffset *  inDataL[i] +FeedbackSampleL * dryWetValues.currentValue * scaleValues.currentValue * gainCoefficientValues.currentValue *0.95f;
+            mBufferL[mDelayIndexL] = inDataL[i] ;
+            mDelayIndexL++;
+            channelL = dcoffset *  inDataL[i] +getInterpolatedSample(hzValues.currentValue, mBufferL, 44100, mDelayIndexL) * dryWetValues.currentValue * scaleValues.currentValue * gainCoefficientValues.currentValue +getInterpolatedSample(hzValues.currentValue, mBufferL, 44100, mDelayIndexL) * dryWetValues.currentValue * scaleValues.currentValue * gainCoefficientValues.currentValue *0.95f;
+            mBufferL[mDelayIndexL] = channelL;
+            mDelayIndexL++;
             outDataL[i] = channelL;
-           
-         
+            if (mDelayIndexL < 2001)
+                mDelayIndexL -= mDelayIndexL;
            
             
-            mBufferR[mDelayIndex] = inDataR[i] + channelR;
-            channelR  = dcoffset * inDataR[i] +FeedbackSampleR * dryWetValues.currentValue * scaleValues.currentValue * gainCoefficientValues.currentValue * 0.95f;
+            mBufferR[mDelayIndexR] = inDataR[i];
+            mDelayIndexR++;
+            channelR  = dcoffset * inDataR[i] +getInterpolatedSample(hzValues.currentValue, mBufferR, 44100, mDelayIndexR) * dryWetValues.currentValue  +
+            getInterpolatedSample(hzValues.currentValue, mBufferR, 44100, mDelayIndexR) * dryWetValues.currentValue * scaleValues.currentValue * gainCoefficientValues.currentValue *0.95f;
+            mBufferR[mDelayIndexR] = channelR;
+            mDelayIndexR++;
             outDataR[i] = channelR;
-            
-            if (mDelayIndex >= MaxBufferDelaySize){
-                mDelayIndex -= MaxBufferDelaySize;
-                }
-             
+            if (mDelayIndexR < 2001)
+                mDelayIndexR -= mDelayIndexR;
        
     }
     
@@ -282,7 +255,35 @@ ECombFilterAudioProcessor::createParameterLayout()
                
     
 }
-
+float ECombFilterAudioProcessor::getInterpolatedSample(float inDelayTimeInSamples,  float mBuffer[], int MaxBufferDelaySize, int index)
+{
+                    double readPosition = (double)(index) - inDelayTimeInSamples;
+                   
+                    if (readPosition < 0.0f) {
+                        readPosition = readPosition + MaxBufferDelaySize;
+                    }
+                   
+                   
+                    int index_y0 = (int)readPosition - 1;
+                    if(index_y0 <= 0){
+                        index_y0 = index_y0 + MaxBufferDelaySize;
+                    }
+                     
+                    int index_y1 = readPosition;
+                    
+                    if(index_y1 > MaxBufferDelaySize){
+                        index_y1 = index_y1 - MaxBufferDelaySize;
+                    }
+                    
+                    const float sample_y0 = mBuffer[index_y0];
+                    const float sample_y1 = mBuffer[index_y1];
+                    const float t = readPosition - (int)readPosition;
+                    
+                    const float outSample = linear_interp(sample_y0, sample_y1, t);
+                    
+                    
+                    return outSample;
+}
 //==============================================================================
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
